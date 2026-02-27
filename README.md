@@ -1,3 +1,14 @@
+# What changed in this fork
+- Removed gloo distributed from s1_train and s2_train
+
+# Setup
+if the install script fails (as it did for me), use manual installation as is provided in the rest of the original README below
+you will need to manually install pytorch if you want gpu support, replace cu126 with 128 if your gpu supports it
+```command
+pip install torch torchcodec torchaudio --index-url "https://download.pytorch.org/whl/cu126"
+```
+
+
 <div align="center">
 
 <h1>GPT-SoVITS-WebUI</h1>
