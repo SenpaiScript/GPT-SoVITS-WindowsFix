@@ -43,21 +43,16 @@ class Text2SemanticDataModule(LightningDataModule):
         #     pad_val=self.config['data']['pad_val'])
 
     def train_dataloader(self):
-        batch_size = (
-            self.config["train"]["batch_size"] // 2
-            if self.config["train"].get("if_dpo", False) is True
-            else self.config["train"]["batch_size"]
-        )
-        batch_size = max(min(batch_size, len(self._train_dataset) // 4), 1)  # 防止不保存
-        sampler = DistributedBucketSampler(self._train_dataset, batch_size=batch_size)
-        return DataLoader(
+      batch_size = self.config["train"]["batch_size"]
+
+        # Use standard DataLoader for single GPU
+      return DataLoader(
             self._train_dataset,
             batch_size=batch_size,
-            sampler=sampler,
-            collate_fn=self._train_dataset.collate,
-            num_workers=self.num_workers,
-            persistent_workers=True,
-            prefetch_factor=16,
+            shuffle=True,  # random shuffle for training
+            #num_workers=self.config.get("num_workers", 4),
+            num_workers=0,
+            pin_memory=True,
         )
 
     def val_dataloader(self):
