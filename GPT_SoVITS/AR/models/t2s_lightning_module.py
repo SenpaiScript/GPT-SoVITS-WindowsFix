@@ -42,6 +42,19 @@ class Text2SemanticLightningModule(LightningModule):
     def training_step(self, batch: Dict, batch_idx: int):
         opt = self.optimizers()
         scheduler = self.lr_schedulers()
+
+        # --- START OF FIX ---
+        # Explicitly ensure all inputs are Tensors and moved to the correct device
+        for key in ["phoneme_ids", "phoneme_ids_len", "semantic_ids", "semantic_ids_len", "bert_feature"]:
+            if key in batch:
+                if isinstance(batch[key], list):
+                    # Convert list to tensor; use Long for IDs, Float for features
+                    dtype = torch.float32 if key == "bert_feature" else torch.long
+                    batch[key] = torch.tensor(batch[key], dtype=dtype)
+                
+                # Move to GPU/CPU automatically based on the model's location
+                batch[key] = batch[key].to(self.device)
+        # --- END OF FIX ---
         forward = self.model.forward if self.config["train"].get("if_dpo", False) == True else self.model.forward_old
         loss, acc = forward(
             batch["phoneme_ids"],

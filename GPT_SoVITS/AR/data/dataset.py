@@ -225,8 +225,9 @@ class Text2SemanticDataset(Dataset):
         else:
             flag = 1
         if flag == 1:
-            # bert_feature=torch.zeros_like(phoneme_ids,dtype=torch.float32)
-            bert_feature = None
+            #bert_feature=torch.zeros_like(phoneme_ids,dtype=torch.float32)
+            #bert_feature = None
+            bert_feature = torch.zeros((1024, len(phoneme_ids)), dtype=torch.float32)
         else:
             assert bert_feature.shape[-1] == len(phoneme_ids)
         return {
@@ -245,48 +246,51 @@ class Text2SemanticDataset(Dataset):
 
     def collate(self, examples: List[Dict]) -> Dict:
         sample_index: List[int] = []
-        phoneme_ids: List[torch.Tensor] = []
+        phoneme_ids: List[np.ndarray] = []
         phoneme_ids_lens: List[int] = []
-        semantic_ids: List[torch.Tensor] = []
+        semantic_ids: List[np.ndarray] = []
         semantic_ids_lens: List[int] = []
-        # return
 
         for item in examples:
             sample_index.append(item["idx"])
+            # Ensure we are working with numpy arrays for the batch_sequences function
             phoneme_ids.append(np.array(item["phoneme_ids"], dtype=np.int64))
             semantic_ids.append(np.array(item["semantic_ids"], dtype=np.int64))
             phoneme_ids_lens.append(item["phoneme_ids_len"])
             semantic_ids_lens.append(item["semantic_ids_len"])
 
-        # pad 0
-        phoneme_ids = batch_sequences(phoneme_ids)
-        semantic_ids = batch_sequences(semantic_ids, pad_value=self.PAD)
+        # Use the existing batch_sequences helper (pads the sequences)
+        phoneme_ids_batched = batch_sequences(phoneme_ids)
+        semantic_ids_batched = batch_sequences(semantic_ids, pad_value=self.PAD)
 
-        # # convert each batch to torch.tensor
-        phoneme_ids = torch.tensor(phoneme_ids)
-        semantic_ids = torch.tensor(semantic_ids)
-        phoneme_ids_lens = torch.tensor(phoneme_ids_lens)
-        semantic_ids_lens = torch.tensor(semantic_ids_lens)
-        bert_padded = torch.FloatTensor(len(examples), 1024, max(phoneme_ids_lens))
-        bert_padded.zero_()
+        # Explicitly convert to LongTensors (required for Embedding layers)
+        phoneme_ids_tensor = torch.from_numpy(phoneme_ids_batched).long()
+        semantic_ids_tensor = torch.from_numpy(semantic_ids_batched).long()
+        phoneme_ids_lens_tensor = torch.tensor(phoneme_ids_lens).long()
+        semantic_ids_lens_tensor = torch.tensor(semantic_ids_lens).long()
+
+        # Initialize the padded BERT tensor
+        # Shape: (Batch, Feature_Dim, Max_Phoneme_Len)
+        bert_padded = torch.zeros(
+            len(examples), 1024, max(phoneme_ids_lens), dtype=torch.float32
+        )
 
         for idx, item in enumerate(examples):
             bert = item["bert_feature"]
-            if bert != None:
+            if bert is not None:
+                # Ensure bert is a tensor before slicing/copying
+                if not isinstance(bert, torch.Tensor):
+                    bert = torch.tensor(bert, dtype=torch.float32)
+                
+                # Handle potential dimension mismatch during copy
                 bert_padded[idx, :, : bert.shape[-1]] = bert
 
         return {
-            # List[int]
-            "ids": sample_index,
-            # torch.Tensor (B, max_phoneme_length)
-            "phoneme_ids": phoneme_ids,
-            # torch.Tensor (B)
-            "phoneme_ids_len": phoneme_ids_lens,
-            # torch.Tensor (B, max_semantic_ids_length)
-            "semantic_ids": semantic_ids,
-            # torch.Tensor (B)
-            "semantic_ids_len": semantic_ids_lens,
-            # torch.Tensor (B, 1024, max_phoneme_length)
+            "ids": sample_index, # Standard list is fine for internal ID tracking
+            "phoneme_ids": phoneme_ids_tensor,
+            "phoneme_ids_len": phoneme_ids_lens_tensor,
+            "semantic_ids": semantic_ids_tensor,
+            "semantic_ids_len": semantic_ids_lens_tensor,
             "bert_feature": bert_padded,
         }
 
